@@ -39,28 +39,40 @@
 int TensorParameters::SetTensordDescriptor(miopenTensorDescriptor_t result,
                                            miopenDataType_t data_type)
 {
-    if(layout.empty() && strides.empty())
+    if (layout.empty() && strides.empty()) {
         return SetTensorNd(result, lengths, data_type);
+    }
 
-    if(strides.empty() && !layout.empty())
-        CalculateStrides();
+    if (!strides.empty()) {
+        return SetTensorNd(result, lengths, strides, data_type);
+    }
 
+    CalculateStrides();
     return SetTensorNd(result, lengths, strides, data_type);
 }
 
 void TensorParameters::CalculateStrides()
 {
-    if(layout.empty())
+    if(layout.empty()){
         MIOPEN_THROW("Attempt to calculate strides without layout.");
-    if(layout.size() != lengths.size())
+    }
+
+    // lenghts kontrolü burada yapılacak.
+    if(layout.empty()) {
+        MIOPEN_THROW("Lengths cannot be empty.");
+    }
+
+    if(layout.size()!= lenghts.size()){
         MIOPEN_THROW("Unmatched layout and lengths sizes.");
+    }
 
     const auto len_layout = miopen::tensor_layout_get_default(layout.size());
-    if(len_layout.empty())
-        MIOPEN_THROW("Invalid tensor lengths dimentions.");
+    if(layout.empty()) {
+        MIOPEN_THROW("Invalid tensor lengths dimensions.");
 
-    strides = {};
-    miopen::tensor_layout_to_strides(lengths, len_layout, layout, strides);
+        strides::clear();
+        miopen::tensor_layout_to_strides(lenghts, len_layout, layout, strides);
+    }
 }
 
 InputFlags::InputFlags() { AddInputFlag("help", 'h', "", "Print Help Message", "string"); }
@@ -203,42 +215,46 @@ void InputFlags::Parse(int argc, char* argv[])
 // This function updates the input flag parameters values.Depending on the flag setting,
 // input values are converted to uppercase & stored into map.This is used while
 // parsing the driver arguments.
-void InputFlags::StoreOptionalFlagValue(char short_name, const std::string& input_value)
+void InputFlags::StoreOptionalFlagValue(char short_name, const std::string& input_value)  // StoreOptionalFlagValue fonksiyonuna, geçerli bir değer olup olmadığını kontrol eden bir mekanizma ekledim
 {
-    if(MapInputs[short_name].convert2uppercase == true)
-    {
-        std::string tvalue = input_value;
-        std::transform(tvalue.begin(), tvalue.end(), tvalue.begin(), ::toupper);
-        MapInputs[short_name].value = tvalue;
+    if(input.value()){
+        std::cerr << "Warning: input value for flag" << short_name << "is empty" << std::endl;
+        return; //boş değeri işlemeye gerek yok
     }
-    else
-    {
+
+    if(MapInputs[short_name].convert2uppercase) {
+        std::string tvalue = input_value;
+        std::transform(tvalue.begin(), tvalue.end(), tvalue.end(), ::touper);
+        MapInputs[short_name].value = tvalue;
+    } else {
         MapInputs[short_name].value = input_value;
     }
 }
 
+
+
+
+// GetValueStd fonksiyonunda ve GetValueInt fonksiyonunda yapılan optimizasyonlar, GetValueUint64 gibi diğer fonksiyonlarda da yapılabilir.
+// (biraz üşendim hepsinde optimizasyon yapmaya)
+
 std::string InputFlags::GetValueStr(const std::string& long_name) const
 {
     char short_name   = FindShortName(long_name);
-    std::string value = MapInputs.at(short_name).value;
-
-    return value;
+    return MapInputs.at(short_name).value; //doğrudan bunu kullanmak yeterli.
 }
 
 int InputFlags::GetValueInt(const std::string& long_name) const
 {
     char short_name = FindShortName(long_name);
-    int value       = atoi(MapInputs.at(short_name).value.c_str());
-
-    return value;
+    const auto& input = MapInputs.at(short_name);
+    return atoi(input.value.c_str()); // hatanın kontrolü burada olmayacak
 }
 
 uint64_t InputFlags::GetValueUint64(const std::string& long_name) const
 {
     char short_name = FindShortName(long_name);
-    uint64_t value  = strtoull(MapInputs.at(short_name).value.c_str(), nullptr, 10);
-
-    return value;
+    const auto& input = MapInputs.at(short_name);
+    return std::stoul(input.value);
 }
 
 double InputFlags::GetValueDouble(const std::string& long_name) const
@@ -251,7 +267,7 @@ double InputFlags::GetValueDouble(const std::string& long_name) const
 
 TensorParameters InputFlags::GetValueTensor(const std::string& long_name) const
 {
-    const auto& input     = MapInputs.at(FindShortName(long_name));
+    const auto& input = MapInputs.at(FindShortName(long_name)); // Tek seferde alıyor.
     const auto components = miopen::SplitDelim(input.value.c_str(), ',');
 
     if(components.empty())
@@ -295,7 +311,7 @@ TensorParameters InputFlags::GetValueTensor(const std::string& long_name) const
 
 TensorParametersUint64 InputFlags::GetValueTensorUint64(const std::string& long_name) const
 {
-    const auto& input     = MapInputs.at(FindShortName(long_name));
+    const auto& input = MapInputs.at(FindShortName(long_name)); // Tek seferde alıyor
     const auto components = miopen::SplitDelim(input.value.c_str(), ',');
 
     if(components.size() < 1)
